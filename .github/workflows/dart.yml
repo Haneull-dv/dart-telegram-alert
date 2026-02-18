@@ -3,8 +3,9 @@ name: DART Telegram Alert
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 21-23 * * 1-5"  # KST 06:00~08:59 (월~금)
-    - cron: "*/10 0-11 * * 1-5"   # KST 09:00~20:59 (월~금)
+    - cron: "*/10 21-23 * * 0-4"  # 월~금 아침 (KST 06:00~08:50)
+    - cron: "*/10 0-11 * * 1-5"   # 월~금 일중 (KST 09:00~20:50)
+
 permissions:
   contents: write
 
@@ -16,17 +17,13 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: pip install requests
-
       - name: Run alert
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
@@ -34,7 +31,6 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python dart_alert.py
-
       - name: Save state
         run: |
           git config user.name "github-actions"
