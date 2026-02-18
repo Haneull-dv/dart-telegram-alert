@@ -3,7 +3,7 @@ name: DART Telegram Alert
 on:
   workflow_dispatch:
   schedule:
-    - cron: "40 14 * * *"  # 한국 시간 밤 11:25 (UTC 14:25)에 딱 한 번 실행 테스트
+    - cron: "57 14 * * *"  # 한국 시간 밤 11:25 (UTC 14:25)에 딱 한 번 실행 테스트
 
 permissions:
   contents: write
