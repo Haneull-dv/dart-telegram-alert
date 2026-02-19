@@ -3,7 +3,8 @@ name: DART Telegram Alert
 on:
   workflow_dispatch:
   schedule:
-    - cron: "59 14 * * *"  # 한국 시간 밤 11:25 (UTC 14:25)에 딱 한 번 실행 테스트
+    # KST 13:10 (월~금) = UTC 04:10 (월~금)
+    - cron: "10 4 * * 1-5"
 
 permissions:
   contents: write
@@ -16,13 +17,21 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: pip install requests
+
       - name: Run alert
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
@@ -30,10 +39,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python dart_alert.py
+
       - name: Save state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add state.json || true
           git commit -m "Update state" || echo "No changes"
-          git push
+
+          # push 시 인증 필요: GITHUB_TOKEN 사용
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
