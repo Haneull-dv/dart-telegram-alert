@@ -1,19 +1,19 @@
-import os
 import json
+import os
+import requests
 import time
 import traceback
 from datetime import datetime, timezone, timedelta
-
-import requests
+from dotenv import load_dotenv
 
 # ========= ENV =========
+load_dotenv()
 
 DART_API_KEY = os.environ.get("DART_API_KEY", "")
 CORP_CODE = os.environ.get("DART_CORP_CODE", "")
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-
 
 # MODE:
 # - "test": 항상 결과(있음/없음) + 상세 로그를 텔레그램으로 보냄, state 저장/커밋은 하지 않음
@@ -104,14 +104,13 @@ def get_latest_disclosure(lines: list):
         if not items:
             return None
 
-        first = items[0]
         # 핵심 필드만 로그
-        #log(lines, f"🧾 latest rcp_no={first.get('rcp_no')} report_nm={first.get('report_nm')}")
-        
+        # log(lines, f"🧾 latest rcp_no={first.get('rcp_no')} report_nm={first.get('report_nm')}")
+
         for item in items:
             log(lines, f"🧾 latest rcp_no={item.get('rcp_no')} report_nm={item.get('report_nm')}")
-        
-        return first
+
+        return list(sorted(items, key=lambda i: int(i["rcept_no"])))
 
     if status == "013":
         log(lines, "🟦 조회된 데이터 없음(013) => 공시 없음으로 처리")
@@ -200,9 +199,9 @@ def main():
     state = load_state()
     log(lines, f"🗂️ last_rcp_no(state) = {state.get('last_rcp_no')}")
 
-    latest = None
+    latest_items = None
     try:
-        latest = get_latest_disclosure(lines)
+        latest_items = get_latest_disclosure(lines)
     except Exception as e:
         log(lines, "💥 DART 조회 중 예외 발생")
         log(lines, f"🧨 error: {repr(e)}")
@@ -214,7 +213,7 @@ def main():
         return
 
     # 공시 유무 판단
-    if not latest:
+    if not latest_items:
         summary = "🟦 결과: 새 공시 없음"
         log(lines, summary)
 
@@ -227,50 +226,54 @@ def main():
             log(lines, "🔕 (normal) 공시 없음 → 알림 전송 생략")
         return
 
-    rcp_no = latest.get("rcp_no")
-    report_nm = latest.get("report_nm", "(no report_nm)")
-    link = f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rcp_no}"
+    for item in latest_items:
+        print(f"{item=}")
 
-    log(lines, f"🧾 최신 공시 발견 rcp_no={rcp_no}")
-    log(lines, f"📌 report_nm={report_nm}")
-    log(lines, f"🔗 {link}")
+        rcp_no = item.get("rcept_no")
+        report_nm = item.get("report_nm", "(no report_nm)")
+        link = f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rcp_no}"
 
-    # test 모드: 새 공시 있으면 있다고 텔레그램 전송(항상)
-    if MODE == "test":
-        report_and_exit(
-            lines,
-            f"🧪 [TEST] 새 공시 있음!\n📌 {report_nm}\n🔗 {link}",
-            exit_code=0
-        )
-        return
+        log(lines, f"🧾 최신 공시 발견 rcp_no={rcp_no}")
+        log(lines, f"📌 report_nm={report_nm}")
+        log(lines, f"🔗 {link}")
 
-    # normal 모드: state 비교 후 새 공시만 전송
-    if rcp_no == state.get("last_rcp_no"):
-        log(lines, "🟨 새 공시 아님(이미 전송한 rcp_no)")
-        log(lines, "🔕 (normal) 알림 전송 생략")
-        return
+        # test 모드: 새 공시 있으면 있다고 텔레그램 전송(항상)
+        if MODE == "test":
+            report_and_exit(
+                lines,
+                f"🧪 [TEST] 새 공시 있음!\n📌 {report_nm}\n🔗 {link}",
+                exit_code=0
+            )
+            continue
 
-    # 새 공시: state 업데이트 + 저장
-    state["last_rcp_no"] = rcp_no
-    save_state(state)
-    log(lines, "✅ state.json 업데이트 완료")
+        # normal 모드: state 비교 후 새 공시만 전송
 
-    msg = f"📌 {report_nm}\n{link}"
-    try:
-        resp = send_telegram(lines, msg, tag="NEW_DISCLOSURE")
-        if resp.status_code != 200:
-            # 텔레그램 실패해도 로그 남기고 실패로 종료
-            report_and_exit(lines, "❌ Telegram 전송 실패(새 공시)", exit_code=1)
-            return
-    except Exception as e:
-        log(lines, f"💥 Telegram 전송 예외: {repr(e)}")
-        log(lines, traceback.format_exc())
-        report_and_exit(lines, "❌ Telegram 전송 예외(새 공시)", exit_code=1)
-        return
+        if int(rcp_no) <= int(state["last_rcp_no"] or "0"):
+            log(lines, "🟨 새 공시 아님(이미 전송한 rcp_no)")
+            log(lines, "🔕 (normal) 알림 전송 생략")
+            continue
 
-    log(lines, "🎉 새 공시 알림 전송 성공")
-    # normal 모드는 여기서 종료 (state 커밋/푸시는 workflow가 수행)
-    return
+        # 새 공시: state 업데이트 + 저장
+        state["last_rcp_no"] = rcp_no
+        save_state(state)
+        log(lines, "✅ state.json 업데이트 완료")
+
+        msg = f"📌 {report_nm}\n{link}"
+        try:
+            resp = send_telegram(lines, msg, tag="NEW_DISCLOSURE")
+            if resp.status_code != 200:
+                # 텔레그램 실패해도 로그 남기고 실패로 종료
+                report_and_exit(lines, "❌ Telegram 전송 실패(새 공시)", exit_code=1)
+                continue
+        except Exception as e:
+            log(lines, f"💥 Telegram 전송 예외: {repr(e)}")
+            log(lines, traceback.format_exc())
+            report_and_exit(lines, "❌ Telegram 전송 예외(새 공시)", exit_code=1)
+            continue
+
+        log(lines, "🎉 새 공시 알림 전송 성공")
+        # normal 모드는 여기서 종료 (state 커밋/푸시는 workflow가 수행)
+        continue
 
 
 def report_and_exit(lines: list, headline: str, exit_code: int = 0):
