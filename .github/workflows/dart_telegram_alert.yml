@@ -56,27 +56,18 @@ jobs:
           DART_CORP_CODE: ${{ secrets.DART_CORP_CODE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MODE: normal
-        run: |
-          python src/main.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state.json || true
-          git commit -m "chore: update state.json [skip ci]" || echo "No changes"
-          git push origin main
+          # workflow_dispatch 수동 실행 시 입력한 mode 사용, schedule 자동 실행 시 normal 고정
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'normal' }}
+        run: python src/main.py
 
-        # TODO: 실행 종료 후, state.json 을 스테이징하고 커밋해달라고 제미나이에게 요청하기
-
-      # test 모드에서는 state 저장/푸시 하지 않음
+      # state.json 커밋 & 푸시 (normal 모드 자동 실행 시에만)
       - name: Save state
         if: ${{ github.event_name != 'workflow_dispatch' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add state.json || true
-          git commit -m "Update state" || echo "No changes"
-
+          git commit -m "chore: update state.json [skip ci]" || echo "No changes"
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
