@@ -57,12 +57,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'normal' }}
-        run: python src/main.py \
-               && git config user.name \
-               && "github-actions[bot]" \
-               && git config user.email "41898282+github-actions[bot]@users.noreply.github.com" \
-               && git add state.json \
-               && git commit -m "chore: update state.json [skip ci]" && git push origin main
+        run: |
+          python src/main.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json || true
+          git commit -m "chore: update state.json [skip ci]" || echo "No changes"
+          git push origin main
 
         # TODO: 실행 종료 후, state.json 을 스테이징하고 커밋해달라고 제미나이에게 요청하기
 
