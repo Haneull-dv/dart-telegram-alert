@@ -41,7 +41,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests dotenv
 
       # 수동 실행일 때만 딜레이
       - name: Wait before run (workflow_dispatch only)
